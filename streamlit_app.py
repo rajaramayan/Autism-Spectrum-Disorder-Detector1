@@ -23,9 +23,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 from imblearn.over_sampling import SMOTE
 
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+# Import TensorFlow only when needed (lazy loading)
 
 # Set page configuration
 st.set_page_config(
@@ -40,22 +38,22 @@ st.markdown("---")
 # Sidebar for navigation
 page = st.sidebar.radio(
     "Select Page",
-    ["Home", "Model Training", "Make Prediction", "Model Comparison"]
+    ["🏠 Home", "🤖 Model Training", "🔮 Make Prediction", "📊 Model Comparison"]
 )
 
 # ==========================================
 # UTILITY FUNCTIONS
 # ==========================================
 
-@st.cache_resource
+@st.cache_data
 def load_data():
-    """Load the CSV dataset"""
+    """Load the CSV dataset - cached for performance"""
     df = pd.read_csv("Autism_Screening_Data_Combined.csv")
     return df
 
-@st.cache_resource
+@st.cache_data
 def prepare_data(df):
-    """Preprocess the data"""
+    """Preprocess the data - cached for performance"""
     df = df.drop_duplicates()
     df = df.fillna(df.mode().iloc[0])
     
@@ -124,7 +122,11 @@ def train_models(X_train, X_test, y_train, y_test, X_train_scaled, X_test_scaled
     return results_df, roc_data, trained_models
 
 def train_ann(X_train_scaled, X_test_scaled, y_train, y_test):
-    """Train ANN model"""
+    """Train ANN model - imports TensorFlow only when called"""
+    import tensorflow as tf
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import Dense
+    
     ann = Sequential([
         Dense(32, activation='relu', input_shape=(X_train_scaled.shape[1],)),
         Dense(16, activation='relu'),
@@ -159,7 +161,7 @@ def train_ann(X_train_scaled, X_test_scaled, y_train, y_test):
 # ==========================================
 # PAGE 1: HOME
 # ==========================================
-if page == "Home":
+if page == "🏠 Home":
     st.subheader("Welcome to the ASD Screening Prediction System")
     
     col1, col2 = st.columns(2)
@@ -179,33 +181,25 @@ if page == "Home":
         """)
     
     with col2:
-        st.warning("""
-        ### Disclaimer
+        st.success("""
+        ### ✅ Ready to Use!
         
-        ⚠️ This tool is for **educational and research purposes only**.
+        **Next Steps:**
+        1. Click **🤖 Model Training** to train models
+        2. Click **🔮 Make Prediction** to make predictions
+        3. Click **📊 Model Comparison** to see results
         
-        It should **NOT** be used as a substitute for professional medical diagnosis. 
-        Please consult with qualified healthcare professionals for proper diagnosis and treatment.
+        The app loads data on-demand for optimal performance.
         """)
     
     st.markdown("---")
-    
-    st.subheader("📊 Dataset Information")
-    try:
-        df = load_data()
-        st.write(f"**Dataset Shape:** {df.shape[0]} samples, {df.shape[1]} features")
-        st.write(f"**Features:** {', '.join(df.columns.tolist()[:-1])}")
-        st.write(f"**Target Variable:** {df.columns[-1]}")
-        
-        with st.expander("View Dataset Preview"):
-            st.dataframe(df.head(10))
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
+    st.markdown("**💡 Tip:** Start with the Model Training tab to get predictions!")
+
 
 # ==========================================
 # PAGE 2: MODEL TRAINING
 # ==========================================
-elif page == "Model Training":
+elif page == "🤖 Model Training":
     st.subheader("🤖 Train Models")
     
     try:
@@ -280,7 +274,7 @@ elif page == "Model Training":
 # ==========================================
 # PAGE 3: MAKE PREDICTION
 # ==========================================
-elif page == "Make Prediction":
+elif page == "🔮 Make Prediction":
     st.subheader("🔮 Make Prediction")
     
     if 'scaler' not in st.session_state or 'trained_models' not in st.session_state:
@@ -361,7 +355,7 @@ elif page == "Make Prediction":
 # ==========================================
 # PAGE 4: MODEL COMPARISON
 # ==========================================
-elif page == "Model Comparison":
+elif page == "📊 Model Comparison":
     st.subheader("📊 Model Comparison & Visualization")
     
     if 'results_df' not in st.session_state:
