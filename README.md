@@ -1,3 +1,4 @@
+
 # ASD Screening Prediction System
 
 A web-based application for predicting Autism Spectrum Disorder (ASD) using Machine Learning and Artificial Neural Networks.
@@ -216,3 +217,7 @@ This application demonstrates:
 ---
 
 **Happy exploring! 🚀**
+
+# autism_predictor
+PREDICTION OF AUTISM SPECTRUM DISORDER IN CHILDRENS USING MACHINE LEARNING TECHNIQUES
+
