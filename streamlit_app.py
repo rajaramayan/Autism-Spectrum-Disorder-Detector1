@@ -19,7 +19,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 
 from imblearn.over_sampling import SMOTE
 
@@ -81,13 +81,32 @@ def train_models(X_train, X_test, y_train, y_test, X_train_scaled, X_test_scaled
     """Train all ML models"""
     models = {
         "Logistic Regression": LogisticRegression(max_iter=1000),
-        "Decision Tree": DecisionTreeClassifier(),
-        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
-        "KNN": KNeighborsClassifier(),
-        "SVM (Linear)": SVC(kernel='linear', probability=True),
-        "SVM (RBF)": SVC(kernel='rbf', probability=True),
-        "Naive Bayes": GaussianNB(),
-        "LDA": LinearDiscriminantAnalysis()
+        "Decision Tree": DecisionTreeClassifier(
+            max_depth=5,
+            min_samples_split=20,
+            min_samples_leaf=10,
+            ccp_alpha=0.005,
+            random_state=42
+        ),
+        "Random Forest": RandomForestClassifier(
+            n_estimators=200,
+            max_depth=10,
+            min_samples_split=15,
+            min_samples_leaf=6,
+            max_features='sqrt',
+            min_impurity_decrease=0.001,
+            random_state=42
+        ),
+        "KNN": KNeighborsClassifier(
+            n_neighbors=51,
+            weights='uniform',
+            metric='minkowski',
+            p=1
+        ),
+        "SVM (Poly)": SVC(kernel='poly', degree=2, C=0.1, gamma='scale', probability=True),
+        "SVM (RBF)": SVC(kernel='rbf', C=0.1, gamma='scale', probability=True),
+        "Naive Bayes": GaussianNB(var_smoothing=1e-8),
+        "QDA": QuadraticDiscriminantAnalysis(reg_param=0.7)
     }
     
     results = []
@@ -97,7 +116,9 @@ def train_models(X_train, X_test, y_train, y_test, X_train_scaled, X_test_scaled
     for name, model in models.items():
         model.fit(X_train_scaled, y_train)
         trained_models[name] = model
-        
+
+        train_acc = accuracy_score(y_train, model.predict(X_train_scaled))
+
         y_pred = model.predict(X_test_scaled)
         y_prob = model.predict_proba(X_test_scaled)[:, 1]
         
@@ -110,14 +131,16 @@ def train_models(X_train, X_test, y_train, y_test, X_train_scaled, X_test_scaled
         
         tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
         specificity = tn / (tn + fp)
-        
-        results.append([name, acc, prec, rec, specificity, f1, roc_auc, logloss])
+        gap = train_acc - acc
+
+        results.append([name, train_acc, acc, gap, prec, rec, specificity, f1, roc_auc, logloss])
         
         fpr, tpr, _ = roc_curve(y_test, y_prob)
         roc_data.append((name, fpr, tpr, roc_auc))
     
-    results_df = pd.DataFrame(results, columns=["Model", "Accuracy", "Precision", "Recall",
-                                                "Specificity", "F1 Score", "ROC-AUC", "Log Loss"])
+    results_df = pd.DataFrame(results, columns=["Model", "Train Accuracy", "Accuracy", "Gap",
+                                                "Precision", "Recall", "Specificity",
+                                                "F1 Score", "ROC-AUC", "Log Loss"])
     
     return results_df, roc_data, trained_models
 
@@ -143,7 +166,11 @@ def train_ann(X_train_scaled, X_test_scaled, y_train, y_test):
     
     y_prob_ann = ann.predict(X_test_scaled, verbose=0).flatten()
     y_pred_ann = (y_prob_ann > 0.5).astype(int)
-    
+
+    y_prob_ann_train = ann.predict(X_train_scaled, verbose=0).flatten()
+    y_pred_ann_train = (y_prob_ann_train > 0.5).astype(int)
+    train_acc = accuracy_score(y_train, y_pred_ann_train)
+
     acc = accuracy_score(y_test, y_pred_ann)
     prec = precision_score(y_test, y_pred_ann)
     rec = recall_score(y_test, y_pred_ann)
@@ -153,10 +180,11 @@ def train_ann(X_train_scaled, X_test_scaled, y_train, y_test):
     
     tn, fp, fn, tp = confusion_matrix(y_test, y_pred_ann).ravel()
     specificity = tn / (tn + fp)
+    gap = train_acc - acc
     
     fpr_ann, tpr_ann, _ = roc_curve(y_test, y_prob_ann)
     
-    return ann, [acc, prec, rec, specificity, f1, roc_auc, logloss], (fpr_ann, tpr_ann, roc_auc), history
+    return ann, [train_acc, acc, gap, prec, rec, specificity, f1, roc_auc, logloss], (fpr_ann, tpr_ann, roc_auc), history
 
 # ==========================================
 # PAGE 1: HOME
@@ -238,7 +266,8 @@ elif page == "🤖 Model Training":
                 # Add ANN to results
                 results_df.loc[len(results_df)] = [
                     "ANN", ann_metrics[0], ann_metrics[1], ann_metrics[2],
-                    ann_metrics[3], ann_metrics[4], ann_metrics[5], ann_metrics[6]
+                    ann_metrics[3], ann_metrics[4], ann_metrics[5],
+                    ann_metrics[6], ann_metrics[7], ann_metrics[8]
                 ]
                 
                 roc_data.append(("ANN", ann_roc[0], ann_roc[1], ann_roc[2]))
@@ -267,6 +296,27 @@ elif page == "🤖 Model Training":
             # Best model
             best_model = results_sorted.iloc[0]
             st.success(f"🏆 Best Model: **{best_model['Model']}** with ROC-AUC: {best_model['ROC-AUC']:.4f}")
+
+            # Overfitting Gap Table
+            st.subheader("📊 Overfitting Analysis (Train vs Test Accuracy Gap)")
+            gap_df = results_sorted[["Model", "Train Accuracy", "Accuracy", "Gap"]].copy()
+            gap_df = gap_df.rename(columns={"Accuracy": "Test Accuracy"})
+
+            def gap_status(gap):
+                if gap < 0.02:
+                    return "✅ No overfitting"
+                elif gap < 0.05:
+                    return "✅ Mild — acceptable"
+                elif gap < 0.10:
+                    return "⚠️ Moderate — needs justification"
+                else:
+                    return "❌ Severe overfitting"
+
+            gap_df["Status"] = gap_df["Gap"].apply(gap_status)
+            gap_df["Train Accuracy"] = gap_df["Train Accuracy"].map("{:.6f}".format)
+            gap_df["Test Accuracy"] = gap_df["Test Accuracy"].map("{:.6f}".format)
+            gap_df["Gap"] = gap_df["Gap"].map("{:.6f}".format)
+            st.dataframe(gap_df, use_container_width=True)
     
     except Exception as e:
         st.error(f"Error during training: {e}")
