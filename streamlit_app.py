@@ -20,6 +20,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.neural_network import MLPClassifier
 
 from imblearn.over_sampling import SMOTE
 
@@ -145,31 +146,21 @@ def train_models(X_train, X_test, y_train, y_test, X_train_scaled, X_test_scaled
     return results_df, roc_data, trained_models
 
 def train_ann(X_train_scaled, X_test_scaled, y_train, y_test):
-    """Train ANN model - imports TensorFlow only when called"""
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import Dense
-    
-    ann = Sequential([
-        Dense(32, activation='relu', input_shape=(X_train_scaled.shape[1],)),
-        Dense(16, activation='relu'),
-        Dense(1, activation='sigmoid')
-    ])
-    
-    ann.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    
-    history = ann.fit(X_train_scaled, y_train,
-                      epochs=50,
-                      batch_size=16,
-                      validation_split=0.2,
-                      verbose=0)
-    
-    y_prob_ann = ann.predict(X_test_scaled, verbose=0).flatten()
-    y_pred_ann = (y_prob_ann > 0.5).astype(int)
+    """Train ANN model using sklearn MLPClassifier"""
+    ann = MLPClassifier(
+        hidden_layer_sizes=(32, 16),
+        activation='relu',
+        solver='adam',
+        max_iter=200,
+        random_state=42
+    )
 
-    y_prob_ann_train = ann.predict(X_train_scaled, verbose=0).flatten()
-    y_pred_ann_train = (y_prob_ann_train > 0.5).astype(int)
-    train_acc = accuracy_score(y_train, y_pred_ann_train)
+    ann.fit(X_train_scaled, y_train)
+
+    y_prob_ann = ann.predict_proba(X_test_scaled)[:, 1]
+    y_pred_ann = ann.predict(X_test_scaled)
+
+    train_acc = accuracy_score(y_train, ann.predict(X_train_scaled))
 
     acc = accuracy_score(y_test, y_pred_ann)
     prec = precision_score(y_test, y_pred_ann)
@@ -177,14 +168,14 @@ def train_ann(X_train_scaled, X_test_scaled, y_train, y_test):
     f1 = f1_score(y_test, y_pred_ann)
     roc_auc = roc_auc_score(y_test, y_prob_ann)
     logloss = log_loss(y_test, y_prob_ann)
-    
+
     tn, fp, fn, tp = confusion_matrix(y_test, y_pred_ann).ravel()
     specificity = tn / (tn + fp)
     gap = train_acc - acc
-    
+
     fpr_ann, tpr_ann, _ = roc_curve(y_test, y_prob_ann)
-    
-    return ann, [train_acc, acc, gap, prec, rec, specificity, f1, roc_auc, logloss], (fpr_ann, tpr_ann, roc_auc), history
+
+    return ann, [train_acc, acc, gap, prec, rec, specificity, f1, roc_auc, logloss], (fpr_ann, tpr_ann, roc_auc), None
 
 # ==========================================
 # PAGE 1: HOME
