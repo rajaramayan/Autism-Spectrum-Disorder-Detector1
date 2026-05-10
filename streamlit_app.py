@@ -381,7 +381,7 @@ elif page == "🔮 Make Prediction":
                 
                 with col2:
                     st.subheader("ANN Model Prediction")
-                    ann_prob = st.session_state.ann.predict(input_scaled, verbose=0)[0][0]
+                    ann_prob = st.session_state.ann.predict_proba(input_scaled)[0][1]
                     ann_pred = 1 if ann_prob > 0.5 else 0
                     
                     st.write(f"**Model:** Artificial Neural Network")
